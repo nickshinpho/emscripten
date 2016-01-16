@@ -631,7 +631,7 @@ var BINARYEN_METHOD = ""; // See binaryen's src/js/post.js for details.
 var WASM_BACKEND = 0; // Whether to use the WebAssembly backend that is in development in LLVM.
                       // This requires that BINARYEN be set, as we use Binaryen's s2wasm to
                       // translate the backend output.
-                      // You should not set this yourself, instead set WASM_BACKEND=1 in the
+                      // You should not set this yourself, instead set EMCC_WASM_BACKEND=1 in the
                       // environment.
 
 var WASM = 0; // Older WebAssembly experiment. Compress the asm.js module into an early proposal for WebAssembly,
