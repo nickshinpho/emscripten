@@ -1542,6 +1542,7 @@ function ensureInitRuntime() {
 #if USE_PTHREADS
   // Pass the thread address inside the asm.js scope to store it for fast access that avoids the need for a FFI out.
   __register_pthread_ptr(PThread.mainThreadBlock, /*isMainBrowserThread=*/!ENVIRONMENT_IS_WORKER, /*isMainRuntimeThread=*/1);
+  _emscripten_register_main_browser_thread_id(PThread.mainThreadBlock);
 #endif
   callRuntimeCallbacks(__ATINIT__);
 }
@@ -1935,6 +1936,7 @@ if (!ENVIRONMENT_IS_PTHREAD) addOnPreRun(function() { if (typeof SharedArrayBuff
 
 #if ASSERTIONS
 #if NO_FILESYSTEM
+#if !ASMFS
 var /* show errors on likely calls to FS when it was not included */ FS = {
   error: function() {
     abort('Filesystem support (FS) was not included. The problem is that you are using files from JS, but files were not used from C/C++, so filesystem support was not auto-included. You can force-include filesystem support with  -s FORCE_FILESYSTEM=1');
@@ -1953,6 +1955,7 @@ var /* show errors on likely calls to FS when it was not included */ FS = {
 };
 Module['FS_createDataFile'] = FS.createDataFile;
 Module['FS_createPreloadedFile'] = FS.createPreloadedFile;
+#endif
 #endif
 #endif
 
@@ -2191,7 +2194,7 @@ function integrateWasmJS() {
       // Keep a reference to the compiled module so we can post it to the workers.
       Module['wasmModule'] = module;
       // Instantiation is synchronous in pthreads and we assert on run dependencies.
-      if(!ENVIRONMENT_IS_PTHREAD) removeRunDependency('wasm-instantiate');
+      if (!ENVIRONMENT_IS_PTHREAD) removeRunDependency('wasm-instantiate');
 #else
       removeRunDependency('wasm-instantiate');
 #endif
@@ -2263,8 +2266,10 @@ function integrateWasmJS() {
     return {}; // no exports yet; we'll fill them in later
 #else
     var instance;
+    var module;
     try {
-      instance = new WebAssembly.Instance(new WebAssembly.Module(getBinary()), info)
+      module = new WebAssembly.Module(getBinary());
+      instance = new WebAssembly.Instance(module, info)
     } catch (e) {
       Module['printErr']('failed to compile wasm module: ' + e);
       if (e.toString().indexOf('imported Memory with incompatible size') >= 0) {
@@ -2272,7 +2277,7 @@ function integrateWasmJS() {
       }
       return false;
     }
-    receiveInstance(instance);
+    receiveInstance(instance, module);
     return exports;
 #endif
   }

@@ -1034,6 +1034,9 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
         next_arg_index += 1
         options.js_libraries.append(shared.path_from_root('src', 'library_fetch.js'))
 
+      if shared.Settings.ASMFS:
+        options.js_libraries.append(shared.path_from_root('src', 'library_asmfs.js'))
+
       forced_stdlibs = []
       if shared.Settings.DEMANGLE_SUPPORT:
         shared.Settings.EXPORTED_FUNCTIONS += ['___cxa_demangle']
@@ -1747,8 +1750,8 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
 
       if shared.Settings.USE_PTHREADS:
         target_dir = os.path.dirname(os.path.abspath(target))
-        shutil.copyfile(shared.path_from_root('src', 'pthread-main.js'),
-                        os.path.join(target_dir, 'pthread-main.js'))
+        shared.run_c_preprocessor_on_file(shared.path_from_root('src', 'pthread-main.js'),
+                                          os.path.join(target_dir, 'pthread-main.js'))
 
       # Generate the fetch-worker.js script for multithreaded emscripten_fetch() support if targeting pthreads.
       if shared.Settings.FETCH and shared.Settings.USE_PTHREADS:
@@ -2668,6 +2671,8 @@ def generate_html(target, options, js_target, target_basename,
 
   html = open(target, 'wb')
   html_contents = shell.replace('{{{ SCRIPT }}}', script.replacement())
+  html_contents = html_contents.replace('{{{ TOTAL_MEMORY }}}', str(shared.Settings.TOTAL_MEMORY))
+  html_contents = html_contents.replace('{{{ BINARYEN_MEM_MAX }}}', str(shared.Settings.BINARYEN_MEM_MAX))
   html_contents = tools.line_endings.convert_line_endings(html_contents, '\n', options.output_eol)
   html.write(asbytes(html_contents))
   html.close()

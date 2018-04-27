@@ -166,7 +166,7 @@ var LibraryPThread = {
           }
           if (transferList.length > 0) {
             postMessage({
-                targetThread: parentThreadId,
+                targetThread: _emscripten_main_browser_thread_id() /*parentThreadId*/,
                 cmd: 'objectTransfer',
                 offscreenCanvases: offscreenCanvases,
                 moduleCanvasId: Module['canvas'].id, // moduleCanvasId specifies which canvas is denoted via the "#canvas" shorthand.
@@ -265,12 +265,13 @@ var LibraryPThread = {
         (function(worker) {
           worker.onmessage = function(e) {
             var d = e.data;
+            // Sometimes we need to backproxy events to the calling thread (e.g. HTML5 DOM events handlers such as emscripten_set_mousemove_callback()), so keep track in a globally accessible variable about the thread that initiated the proxying.
+            if (worker.pthread) PThread.currentProxiedOperationCallerThread = worker.pthread.threadInfoStruct;
             // TODO: Move the proxied call mechanism into a queue inside heap.
             if (d.proxiedCall) {
               var returnValue;
               var funcTable = (d.func >= 0) ? proxiedFunctionTable : ASM_CONSTS;
               var funcIdx = (d.func >= 0) ? d.func : (-1 - d.func);
-              PThread.currentProxiedOperationCallerThread = worker.pthread.threadInfoStruct; // Sometimes we need to backproxy events to the calling thread (e.g. HTML5 DOM events handlers such as emscripten_set_mousemove_callback()), so keep track in a globally accessible variable about the thread that initiated the proxying.
               switch(d.proxiedCall & 31) {
                 case 1: returnValue = funcTable[funcIdx](); break;
                 case 2: returnValue = funcTable[funcIdx](d.p0); break;
@@ -298,6 +299,7 @@ var LibraryPThread = {
                 Atomics.store(HEAP32, waitAddress >> 2, 1);
                 Atomics.wake(HEAP32, waitAddress >> 2, 1);
               }
+              PThread.currentProxiedOperationCallerThread = undefined;
               return;
             }
 
@@ -309,6 +311,7 @@ var LibraryPThread = {
               } else {
                 console.error('Internal error! Worker sent a message "' + d.cmd + '" to target pthread ' + d.targetThread + ', but that thread no longer exists!');
               }
+              PThread.currentProxiedOperationCallerThread = undefined;
               return;
             }
 
@@ -341,7 +344,11 @@ var LibraryPThread = {
             } else if (d.cmd === 'alert') {
               alert('Thread ' + d.threadId + ': ' + d.text);
             } else if (d.cmd === 'exit') {
-              // currently no-op
+              // Thread is exiting, no-op here
+            } else if (d.cmd === 'exitProcess') {
+              // A pthread has requested to exit the whole application process (runtime).
+              Module['noExitRuntime'] = false;
+              exit(d.returnCode);
             } else if (d.cmd === 'cancelDone') {
               PThread.freeThreadData(worker.pthread);
               worker.pthread = undefined; // Detach the worker from the pthread object, and return it to the worker pool as an unused worker.
@@ -355,6 +362,7 @@ var LibraryPThread = {
             } else {
               Module['printErr']("worker sent an unknown command " + d.cmd);
             }
+            PThread.currentProxiedOperationCallerThread = undefined;
           };
 
           worker.onerror = function(e) {
@@ -622,7 +630,10 @@ var LibraryPThread = {
       if (inheritSched) {
         var prevSchedPolicy = {{{ makeGetValue('attr', 20/*_a_policy*/, 'i32') }}};
         var prevSchedPrio = {{{ makeGetValue('attr', 24/*_a_prio*/, 'i32') }}};
-        _pthread_getschedparam(_pthread_self(), attr + 20, attr + 24);
+        // If we are inheriting the scheduling properties from the parent thread, we need to identify the parent thread properly - this function call may
+        // be getting proxied, in which case _pthread_self() will point to the thread performing the proxying, not the thread that initiated the call.
+        var parentThreadPtr = PThread.currentProxiedOperationCallerThread ? PThread.currentProxiedOperationCallerThread : _pthread_self();
+        _pthread_getschedparam(parentThreadPtr, attr + 20, attr + 24);
         schedPolicy = {{{ makeGetValue('attr', 20/*_a_policy*/, 'i32') }}};
         schedPrio = {{{ makeGetValue('attr', 24/*_a_prio*/, 'i32') }}};
         {{{ makeSetValue('attr', 20/*_a_policy*/, 'prevSchedPolicy', 'i32') }}};
@@ -1055,40 +1066,6 @@ var LibraryPThread = {
     var ret = Atomics.wake(HEAP32, addr >> 2, count);
     if (ret >= 0) return ret + mainThreadWoken;
     throw 'Atomics.wake returned an unexpected value ' + ret;
-  },
-
-  // Returns the number of threads (>= 0) woken up, or one of the values -EINVAL or -EAGAIN on error.
-  emscripten_futex_wake_or_requeue__deps: ['_main_thread_futex_wait_address'],
-  emscripten_futex_wake_or_requeue: function(addr, count, addr2, cmpValue) {
-    if (addr <= 0 || addr2 <= 0 || addr >= HEAP8.length || addr2 >= HEAP8.length || count < 0
-      || addr&3 != 0 || addr2&3 != 0) {
-      return -{{{ cDefine('EINVAL') }}};
-    }
-
-    // See if main thread is waiting on this address? If so, wake it up by resetting its wake location to zero,
-    // or move it to wait on addr2. Note that this is not a fair procedure, since we always wake main thread first before
-    // any workers, so this scheme does not adhere to real queue-based waiting.
-    var mainThreadWaitAddress = Atomics.load(HEAP32, __main_thread_futex_wait_address >> 2);
-    var mainThreadWoken = 0;
-    if (mainThreadWaitAddress == addr) {
-      // Check cmpValue precondition before taking any action.
-      var val1 = Atomics.load(HEAP32, addr >> 2);
-      if (val1 != cmpValue) return -{{{ cDefine('EAGAIN') }}};
-
-      // If we are actually waking any waiters, then new main thread wait location is reset, otherwise requeue it to wait on addr2.
-      var newMainThreadWaitAddress = (count > 0) ? 0 : addr2;
-      var loadedAddr = Atomics.compareExchange(HEAP32, __main_thread_futex_wait_address >> 2, mainThreadWaitAddress, newMainThreadWaitAddress);
-      if (loadedAddr == mainThreadWaitAddress && count > 0) {
-        --count; // Main thread was woken, so one less workers to wake up.
-        mainThreadWoken = 1;
-      }
-    }
-
-    // Wake any workers waiting on this address.
-    var ret = Atomics.wakeOrRequeue(HEAP32, addr >> 2, count, addr2 >> 2, cmpValue);
-    if (ret == Atomics.NOTEQUAL) return -{{{ cDefine('EAGAIN') }}};
-    if (ret >= 0) return ret + mainThreadWoken;
-    throw 'Atomics.wakeOrRequeue returned an unexpected value ' + ret;
   },
 
   __atomic_is_lock_free: function(size, ptr) {

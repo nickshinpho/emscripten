@@ -67,7 +67,7 @@ Module['instantiateWasm'] = function(info, receiveInstance) {
   instance = new WebAssembly.Instance(Module['wasmModule'], info);
   // We don't need the module anymore; new threads will be spawned from the main thread.
   delete Module['wasmModule'];
-  receiveInstance(instance);
+  receiveInstance(instance); // The second 'module' parameter is intentionally null here, we don't need to keep a ref to the Module object from here.
   return instance.exports;
 }
 //#endif
@@ -128,9 +128,9 @@ this.onmessage = function(e) {
       assert(STACK_MAX > STACK_BASE);
       establishStackSpace(e.data.stackBase, e.data.stackBase + e.data.stackSize);
       var result = 0;
-//#if STACK_OVERFLOW_CHECK
-      if (typeof writeStackCookie === 'function') writeStackCookie();
-//#endif
+#if STACK_OVERFLOW_CHECK
+      writeStackCookie();
+#endif
 
       PThread.receiveObjectTransfer(e.data);
       PThread.setThreadStatus(_pthread_self(), 1/*EM_THREAD_STATUS_RUNNING*/);
@@ -145,9 +145,9 @@ this.onmessage = function(e) {
         // flag -s EMULATE_FUNCTION_POINTER_CASTS=1 to add in emulation for this x86 ABI extension.
         result = Module['asm'].dynCall_ii(e.data.start_routine, e.data.arg);
 
-//#if STACK_OVERFLOW_CHECK
-        if (typeof checkStackCookie === 'function') checkStackCookie();
-//#endif
+#if STACK_OVERFLOW_CHECK
+        checkStackCookie();
+#endif
 
       } catch(e) {
         if (e === 'Canceled!') {
