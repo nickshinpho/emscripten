@@ -1494,6 +1494,7 @@ var LibraryJSEvents = {
     strategy.deferUntilInEventHandler = deferUntilInEventHandler;
     strategy.canvasResizedCallback = {{{ makeGetValue('fullscreenStrategy', C_STRUCTS.EmscriptenFullscreenStrategy.canvasResizedCallback, 'i32') }}};
     strategy.canvasResizedCallbackUserData = {{{ makeGetValue('fullscreenStrategy', C_STRUCTS.EmscriptenFullscreenStrategy.canvasResizedCallbackUserData, 'i32') }}};
+//    strategy.canvasResizedCallbackTargetThread = {{{ makeGetValue('fullscreenStrategy', C_STRUCTS.EmscriptenFullscreenStrategy.canvasResizedCallbackTargetThread, 'u32') }}};
     __currentFullscreenStrategy = strategy;
 
     return _emscripten_do_request_fullscreen(target, strategy);
