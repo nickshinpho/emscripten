@@ -911,7 +911,7 @@ var WASM_BINARY_FILE = ''; // name of the file containing wasm binary, if releva
 var ASMJS_CODE_FILE = ''; // name of the file containing asm.js, if relevant
 var SOURCE_MAP_BASE = ''; // Base URL the source mapfile, if relevant
 
-var MEM_INIT_IN_WASM = 0; // Choose whether to embed the global data section inside the .wasm file.
+var MEM_INIT_IN_WASM = -1; // Choose whether to embed the global data section inside the .wasm file.
                            // -1: Choose automatically depending on other build settings such as threading, and if dual-deploying asm.js and wasm (default),
                            //  0: Explicitly choose to generate a .mem file,
                            //  1: Explicitly choose to embed global data section in the .wasm file
