@@ -4,7 +4,14 @@
  */
 
 var LibraryGL = {
+#if USE_PTHREADS
+  // If GLctxIsOnParentThread is true, then
+  //   a) the running thread is not the main browser thread, and
+  //   b) the currently active GL context is running on the main browser thread, so all GL calls need to be proxied to it.
+  $GL__postset: 'var GLctx; var GLctxIsOnParentThread = false; GL.init()',
+#else
   $GL__postset: 'var GLctx; GL.init()',
+#endif
   $GL: {
 #if GL_DEBUG
     debug: true,
@@ -694,7 +701,11 @@ var LibraryGL = {
 #endif
 
     registerContext: function(ctx, webGLContextAttributes) {
-      var handle = GL.getNewId(GL.contexts);
+      var handle = _malloc(8); // Make space on the heap to store GL context attributes that need to be accessible as shared between threads.
+      {{{ makeSetValue('handle', 0, 'webGLContextAttributes["explicitSwapControl"]', 'i32')}}}; // explicitSwapControl
+#if USE_PTHREADS
+      {{{ makeSetValue('handle', 4, '_pthread_self()', 'i32')}}}; // the thread pointer of the thread that owns the control of the context
+#endif
       var context = {
         handle: handle,
         attributes: webGLContextAttributes,
@@ -734,8 +745,22 @@ var LibraryGL = {
     },
 
     makeContextCurrent: function(contextHandle) {
+      // Deactivating current context?
+      if (!contextHandle) {
+        GLctx = Module.ctx = GL.currentContext = null;
+        return true;
+      }
       var context = GL.contexts[contextHandle];
-      if (!context) return false;
+      if (!context) {
+#if GL_DEBUG
+#if USE_PTHREADS
+        console.error('GL.makeContextCurrent() failed! WebGL context ' + contextHandle + ' does not exist, or was created on another thread!');
+#else
+        console.error('GL.makeContextCurrent() failed! WebGL context ' + contextHandle + ' does not exist!');
+#endif
+#endif
+        return false;
+      }
       GLctx = Module.ctx = context.GLctx; // Active WebGL context object.
       GL.currentContext = context; // Active Emscripten GL layer context object.
       return true;
@@ -746,9 +771,11 @@ var LibraryGL = {
     },
 
     deleteContext: function(contextHandle) {
+      if (!contextHandle) return;
       if (GL.currentContext === GL.contexts[contextHandle]) GL.currentContext = null;
       if (typeof JSEvents === 'object') JSEvents.removeAllHandlersOnTarget(GL.contexts[contextHandle].GLctx.canvas); // Release all JS event handlers on the DOM element that the GL context is associated with since the context is now deleted.
       if (GL.contexts[contextHandle] && GL.contexts[contextHandle].GLctx.canvas) GL.contexts[contextHandle].GLctx.canvas.GLctxObject = undefined; // Make sure the canvas object no longer refers to the context object so there are no GC surprises.
+      _free(GL.contexts[contextHandle]);
       GL.contexts[contextHandle] = null;
     },
 
@@ -1114,6 +1141,7 @@ var LibraryGL = {
   },
 
 #if USE_WEBGL2
+  glGetStringi__sig: 'iii',
   glGetStringi: function(name, index) {
     if (GLctx.canvas.GLctxObject.version < 2) {
       GL.recordError(0x0502 /* GL_INVALID_OPERATION */); // Calling GLES3/WebGL2 function with a GLES2/WebGL1 context
@@ -3580,11 +3608,9 @@ var LibraryGL = {
   },
 #endif
 
-  glGetAttribLocation__sig: 'vii',
+  glGetAttribLocation__sig: 'iii',
   glGetAttribLocation: function(program, name) {
-    program = GL.programs[program];
-    name = Pointer_stringify(name);
-    return GLctx.getAttribLocation(program, name);
+      return GLctx.getAttribLocation(GL.programs[program], Pointer_stringify(name));
   },
 
   glGetActiveAttrib__sig: 'viiiiiii',
@@ -3882,6 +3908,7 @@ var LibraryGL = {
                             GL.shaders[shader]);
   },
 
+  glGetShaderPrecisionFormat__sig: 'viiii',
   glGetShaderPrecisionFormat: function(shaderType, precisionType, range, precision) {
     var result = GLctx.getShaderPrecisionFormat(shaderType, precisionType);
     {{{ makeSetValue('range', '0', 'result.rangeMin', 'i32') }}};
@@ -7474,6 +7501,7 @@ var LibraryGL = {
   glGenVertexArraysOES: 'glGenVertexArrays',
   glDeleteVertexArraysOES: 'glDeleteVertexArrays',
   glBindVertexArrayOES: 'glBindVertexArray',
+  glIsVertexArrayOES: 'glIsVertexArray',
 
   // GLU
 
@@ -7762,6 +7790,7 @@ var LibraryGL = {
   // OpenGL ES 2.0 draw buffer extensions compatibility
 
   glDrawBuffersEXT: 'glDrawBuffers',
+  glDrawBuffersWEBGL: 'glDrawBuffers',
 
   // passthrough functions with GLboolean parameters
 
@@ -7897,6 +7926,7 @@ if (LEGACY_GL_EMULATION) {
 function copyLibEntry(a, b) {
   LibraryGL[a] = LibraryGL[b];
   LibraryGL[a + '__postset'] = LibraryGL[b + '__postset'];
+  LibraryGL[a + '__proxy'] = LibraryGL[b + '__proxy'];
   LibraryGL[a + '__sig'] = LibraryGL[b + '__sig'];
   LibraryGL[a + '__asm'] = LibraryGL[b + '__asm'];
   LibraryGL[a + '__deps'] = LibraryGL[b + '__deps'].slice(0);
@@ -7904,7 +7934,7 @@ function copyLibEntry(a, b) {
 
 // GL proc address retrieval - allow access through glX and emscripten_glX, to allow name collisions with user-implemented things having the same name (see gl.c)
 keys(LibraryGL).forEach(function(x) {
-  if (x.substr(-6) == '__deps' || x.substr(-9) == '__postset' || x.substr(-5) == '__sig' || x.substr(-5) == '__asm' || x.substr(0, 2) != 'gl') return;
+  if (x.substr(-7) == '__proxy' || x.substr(-6) == '__deps' || x.substr(-9) == '__postset' || x.substr(-5) == '__sig' || x.substr(-5) == '__asm' || x.substr(0, 2) != 'gl') return;
   while (typeof LibraryGL[x] === 'string') {
     // resolve aliases right here, simpler for fastcomp
     copyLibEntry(x, LibraryGL[x]);

@@ -269,10 +269,15 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
       ['-Oz', '-I' + libcxxabi_include])
 
   # gl
-  def create_gl(libname): # libname is ignored, this is just one .o file
-    o = in_temp('gl.o')
-    check_call([shared.PYTHON, shared.EMCC, shared.path_from_root('system', 'lib', 'gl.c'), '-o', o])
-    return o
+  def create_gl(libname):
+    src_dir = shared.path_from_root('system', 'lib', 'gl')
+    files = []
+    for dirpath, dirnames, filenames in os.walk(src_dir):
+      filenames = filter(lambda f: f.endswith('.c'), filenames)
+      files += map(lambda f: os.path.join(src_dir, f), filenames)
+    flags = ['-Oz']
+    if '-mt' in libname: flags += ['-s', 'USE_PTHREADS=1']
+    return build_libc(libname, files, flags)
 
   # al
   def create_al(libname): # libname is ignored, this is just one .o file
@@ -488,7 +493,6 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
 
   system_libs = [('libcxx',        'a',  create_libcxx,      libcxx_symbols,      ['libcxxabi'], True),
                  ('libcxxabi',     'bc', create_libcxxabi,   libcxxabi_symbols,   ['libc'],      False),
-                 ('gl',            'bc', create_gl,          gl_symbols,          ['libc'],      False),
                  ('al',            'bc', create_al,          al_symbols,          ['libc'],      False),
                  ('html5',         'bc', create_html5,       html5_symbols,       ['html5'],     False),
                  ('compiler-rt',   'a',  create_compiler_rt, compiler_rt_symbols, ['libc'],      False),
@@ -496,13 +500,15 @@ def calculate(temp_files, in_temp, stdout_, stderr_, forced=[]):
                  (malloc_name(),   'bc', create_malloc,      [],                  [],            False)]
 
   if shared.Settings.USE_PTHREADS:
-    system_libs += [('libc-mt',        'bc', create_libc,           libc_symbols,     [],       False),
-                    ('pthreads',       'bc', create_pthreads,       pthreads_symbols, ['libc'], False),
+    system_libs += [('libc-mt',        'bc', create_libc,           libc_symbols,           [],       False),
+                    ('gl-mt',          'bc', create_gl,             gl_symbols,             ['libc'], False),
+                    ('pthreads',       'bc', create_pthreads,       pthreads_symbols,       ['libc'], False),
                     ('pthreads_asmjs', 'bc', create_pthreads_asmjs, asmjs_pthreads_symbols, ['libc'], False)]
     force.add('pthreads')
     force.add('pthreads_asmjs')
   else:
-    system_libs += [('libc', 'bc', create_libc, libc_symbols, [], False)]
+    system_libs += [('libc', 'bc', create_libc, libc_symbols, [], False),
+                    ('gl',   'bc', create_gl,   gl_symbols,   ['libc'], False)]
 
   force.add(malloc_name())
 
