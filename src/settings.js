@@ -897,6 +897,16 @@ var TEXTDECODER = 1; // Is enabled, use the JavaScript TextDecoder API for strin
 var OFFSCREENCANVAS_SUPPORT = 0; // If set to 1, enables support for transferring canvases to pthreads and creating WebGL contexts in them,
                                  // as well as explicit swap control for GL contexts. This needs browser support for the OffscreenCanvas
                                  // specification.
+var OFFSCREEN_FRAMEBUFFER = 0; // If set to 1, enables support for WebGL contexts to render to an offscreen render target, to avoid
+                               // the implicit swap behavior of WebGL where exiting any event callback would automatically perform a "flip"
+                               // to present rendered content on screen. When an Emscripten GL context has Offscreen Framebuffer enabled, a single
+                               // frame can be composited from multiple event callbacks, and the swap function emscripten_webgl_commit_frame()
+                               // is then explicitly called to present the rendered content on screen.
+                               // The OffscreenCanvas feature also enables explicit GL frame swapping support, and also,
+                               // -s OFFSCREEN_FRAMEBUFFER=1 feature can be used to polyfill support for accessing WebGL in multiple
+                               // threads in the absence of OffscreenCanvas support in browser, at the cost of some performance and latency.
+                               // OffscreenCanvas and Offscreen Framebuffer support can be enabled at the same time, and allows one to
+                               // utilize OffscreenCanvas where available, and to fall back to Offscreen Framebuffer otherwise.
 
 var FETCH_DEBUG = 0; // If nonzero, prints out debugging information in library_fetch.js
 
@@ -920,7 +930,10 @@ var WASM_BINARY_FILE = ''; // For internal use only (name of the file containing
 var ASMJS_CODE_FILE = ''; // For internal use only (name of the file containing asm.js, if relevant).
 var SOURCE_MAP_BASE = ''; // Base URL the source mapfile, if relevant
 
-var MEM_INIT_IN_WASM = 0; // for internal use only
+var MEM_INIT_IN_WASM = 0; // Choose whether to embed the global data section inside the .wasm file.
+                           // -1: Choose automatically depending on other build settings such as threading, and if dual-deploying asm.js and wasm (default),
+                           //  0: Explicitly choose to generate a .mem file,
+                           //  1: Explicitly choose to embed global data section in the .wasm file
 
 var SUPPORT_BASE64_EMBEDDING = 0; // If set to 1, src/base64Utils.js will be included in the bundle.
                                   // This is set internally when needed (SINGLE_FILE)

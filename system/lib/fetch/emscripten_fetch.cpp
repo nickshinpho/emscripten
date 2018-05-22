@@ -37,8 +37,10 @@ void emscripten_proxy_fetch(emscripten_fetch_t *fetch)
 	__emscripten_fetch_queue *queue = _emscripten_get_fetch_queue();
 //	TODO handle case when queue->numQueuedItems >= queue->queueSize
 	queue->queuedOperations[queue->numQueuedItems++] = fetch;
-	EM_ASM(console.log('Queued fetch to fetch-worker to process. There are now ' + $0 + ' operations in the queue.'),
-		queue->numQueuedItems);
+//#ifdef FETCH_DEBUG
+//	EM_ASM(console.log('Queued fetch to fetch-worker to process. There are now ' + $0 + ' operations in the queue.'),
+//		queue->numQueuedItems);
+//#endif
 	// TODO: mutex unlock
 }
 
@@ -105,16 +107,24 @@ EMSCRIPTEN_RESULT emscripten_fetch_wait(emscripten_fetch_t *fetch, double timeou
 	if (proxyState == 2) return EMSCRIPTEN_RESULT_SUCCESS; // already finished.
 	if (proxyState != 1) return EMSCRIPTEN_RESULT_INVALID_PARAM; // the fetch should be ongoing?
 // #ifdef FETCH_DEBUG
-	EM_ASM(console.log('fetch: emscripten_fetch_wait..'));
+//	EM_ASM(console.log('fetch: emscripten_fetch_wait..'));
 // #endif
 	// TODO: timeoutMsecs is currently ignored. Return EMSCRIPTEN_RESULT_TIMED_OUT on timeout.
 	while(proxyState == 1/*sent to proxy worker*/)
 	{
-		emscripten_futex_wait(&fetch->__proxyState, proxyState, 100 /*TODO HACK:Sleep sometimes doesn't wake up?*/);//timeoutMsecs);
-		proxyState = emscripten_atomic_load_u32(&fetch->__proxyState);
+		if (!emscripten_is_main_browser_thread())
+		{
+			emscripten_futex_wait(&fetch->__proxyState, proxyState, 100 /*TODO HACK:Sleep sometimes doesn't wake up?*/);//timeoutMsecs);
+			proxyState = emscripten_atomic_load_u32(&fetch->__proxyState);
+		}
+		else 
+		{
+			EM_ASM({ console.error('fetch: emscripten_fetch_wait failed: main thread cannot block to wait for long periods of time! Migrate the application to run in a worker to perform synchronous file IO, or switch to using asynchronous IO.') });
+			return EMSCRIPTEN_RESULT_FAILED;
+		}
 	}
 // #ifdef FETCH_DEBUG
-	EM_ASM(console.log('fetch: emscripten_fetch_wait done..'));
+//	EM_ASM(console.log('fetch: emscripten_fetch_wait done..'));
 // #endif
 
 	if (proxyState == 2) return EMSCRIPTEN_RESULT_SUCCESS;
