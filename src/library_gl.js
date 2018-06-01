@@ -5032,7 +5032,8 @@ var LibraryGL = {
       var TEX_MATRIX_UNIFORM_PREFIX = "uTexMatrix";
 
       // Static vars:
-      var s_texUnits = null; //[];
+//      var s_texUnits = null; //[];
+var s_texUnits = []; // XXX temp crash fix...
       var s_activeTexture = 0;
 
       var s_requiredTexUnitsForPass = [];
@@ -5632,6 +5633,8 @@ var LibraryGL = {
 
         hook_enable: function(cap) {
           var cur = getCurTexUnit();
+// XXX temp crash fix...
+if (!s_texUnits.length) return;
           switch (cap) {
             case GL_TEXTURE_1D:
               if (!cur.enabled_tex1D) {

@@ -2723,7 +2723,7 @@ def generate_html(target, options, js_target, target_basename,
   html = open(target, 'wb')
   html_contents = shell.replace('{{{ SCRIPT }}}', script.replacement())
   html_contents = html_contents.replace('{{{ TOTAL_MEMORY }}}', str(shared.Settings.TOTAL_MEMORY))
-  html_contents = html_contents.replace('{{{ BINARYEN_MEM_MAX }}}', str(shared.Settings.BINARYEN_MEM_MAX))
+  html_contents = html_contents.replace('{{{ WASM_MEM_MAX }}}', str(shared.Settings.WASM_MEM_MAX))
   html_contents = tools.line_endings.convert_line_endings(html_contents, '\n', options.output_eol)
   html.write(asbytes(html_contents))
   html.close()

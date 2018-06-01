@@ -983,9 +983,7 @@ var LibrarySDL = {
           break;
         }
         case 'resize': {
-          {{{ makeSetValue('ptr', C_STRUCTS.SDL_KeyboardEvent.type, 'SDL.DOMEventToSDLEvent[event.type]', 'i32') }}};
-          {{{ makeSetValue('ptr', C_STRUCTS.SDL_ResizeEvent.w, 'event.w', 'i32') }}};
-          {{{ makeSetValue('ptr', C_STRUCTS.SDL_ResizeEvent.h, 'event.h', 'i32') }}};
+// version-13 no longer has this...
           break;
         }
         case 'joystick_button_up': case 'joystick_button_down': {

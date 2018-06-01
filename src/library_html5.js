@@ -330,9 +330,6 @@ var LibraryJSEvents = {
       var mouseEventHandlerFunc = function(event) {
         var e = event || window.event;
 
-        // TODO: Make this access thread safe, or this could update live while app is reading it.
-        JSEvents.fillMouseEventData(JSEvents.mouseEvent, e, target);
-
 #if USE_PTHREADS
         if (targetThread) {
           var mouseEventData = _malloc( {{{ C_STRUCTS.EmscriptenMouseEvent.__size__ }}} ); // This allocated block is passed as satellite data to the proxied function call, so the call frees up the data block when done.
@@ -340,7 +337,11 @@ var LibraryJSEvents = {
           JSEvents.queueEventHandlerOnThread_iiii(targetThread, callbackfunc, eventTypeId, mouseEventData, userData);
         } else
 #endif
-        if (Module['dynCall_iiii'](callbackfunc, eventTypeId, JSEvents.mouseEvent, userData)) e.preventDefault();
+		{
+          // TODO: Make this access thread safe, or this could update live while app is reading it.
+          JSEvents.fillMouseEventData(JSEvents.mouseEvent, e, target);
+          if (Module['dynCall_iiii'](callbackfunc, eventTypeId, JSEvents.mouseEvent, userData)) e.preventDefault();
+        }
       };
 
       var eventHandler = {
@@ -540,8 +541,6 @@ var LibraryJSEvents = {
       var deviceOrientationEventHandlerFunc = function(event) {
         var e = event || window.event;
 
-		JSEvents.fillDeviceOrientationEventData(JSEvents.deviceOrientationEvent, e, target); // TODO: Thread-safety with respect to emscripten_get_deviceorientation_status()
-
 #if USE_PTHREADS
         if (targetThread) {
           var deviceOrientationEvent = _malloc( {{{ C_STRUCTS.EmscriptenDeviceOrientationEvent.__size__ }}} );
@@ -549,7 +548,10 @@ var LibraryJSEvents = {
           JSEvents.queueEventHandlerOnThread_iiii(targetThread, callbackfunc, eventTypeId, deviceOrientationEvent, userData);
         } else
 #endif
-        if (Module['dynCall_iiii'](callbackfunc, eventTypeId, JSEvents.deviceOrientationEvent, userData)) e.preventDefault();
+        {
+		  JSEvents.fillDeviceOrientationEventData(JSEvents.deviceOrientationEvent, e, target); // TODO: Thread-safety with respect to emscripten_get_deviceorientation_status()
+          if (Module['dynCall_iiii'](callbackfunc, eventTypeId, JSEvents.deviceOrientationEvent, userData)) e.preventDefault();
+        }
       };
 
       var eventHandler = {
@@ -585,8 +587,6 @@ var LibraryJSEvents = {
       var deviceMotionEventHandlerFunc = function(event) {
         var e = event || window.event;
 
-        JSEvents.fillDeviceMotionEventData(JSEvents.deviceMotionEvent, e, target); // TODO: Thread-safety with respect to emscripten_get_devicemotion_status()
-
 #if USE_PTHREADS
         if (targetThread) {
           var deviceMotionEvent = _malloc( {{{ C_STRUCTS.EmscriptenDeviceMotionEvent.__size__ }}} );
@@ -594,7 +594,10 @@ var LibraryJSEvents = {
           JSEvents.queueEventHandlerOnThread_iiii(targetThread, callbackfunc, eventTypeId, deviceMotionEvent, userData);
         } else
 #endif
-        if (Module['dynCall_iiii'](callbackfunc, eventTypeId, JSEvents.deviceMotionEvent, userData)) e.preventDefault();
+        {
+          JSEvents.fillDeviceMotionEventData(JSEvents.deviceMotionEvent, e, target); // TODO: Thread-safety with respect to emscripten_get_devicemotion_status()
+          if (Module['dynCall_iiii'](callbackfunc, eventTypeId, JSEvents.deviceMotionEvent, userData)) e.preventDefault();
+        }
       };
 
       var eventHandler = {
@@ -888,6 +891,7 @@ var LibraryJSEvents = {
         var e = event || window.event;
 
 #if USE_PTHREADS
+// XXX
         if (targetThread) JSEvents.queueEventHandlerOnThread_iiii(targetThread, callbackfunc, eventTypeId, 0, userData);
         else
 #endif
@@ -1712,7 +1716,9 @@ var LibraryJSEvents = {
     strategy.canvasResolutionScaleMode = {{{ cDefine('EMSCRIPTEN_FULLSCREEN_CANVAS_SCALE_NONE') }}};
     strategy.filteringMode = {{{ cDefine('EMSCRIPTEN_FULLSCREEN_FILTERING_DEFAULT') }}};
     strategy.deferUntilInEventHandler = deferUntilInEventHandler;
+#if USE_PTHREADS
     strategy.canvasResizedCallbackTargetThread = {{{ cDefine('EM_CALLBACK_THREAD_CONTEXT_CALLING_THREAD') }}};
+#endif
 
     return __emscripten_do_request_fullscreen(target, strategy);
   },
@@ -2058,7 +2064,9 @@ var LibraryJSEvents = {
     if (typeof window.onbeforeunload === 'undefined') return {{{ cDefine('EMSCRIPTEN_RESULT_NOT_SUPPORTED') }}};
     // beforeunload callback can only be registered on the main browser thread, because the page will go away immediately after returning from the handler,
     // and there is no time to start proxying it anywhere.
+#if USE_PTHREADS
     if (targetThread !== {{{ cDefine('EM_CALLBACK_THREAD_CONTEXT_MAIN_BROWSER_THREAD') }}}) return {{{ cDefine('EMSCRIPTEN_RESULT_INVALID_PARAM') }}};
+#endif
     JSEvents.registerBeforeUnloadEventCallback(window, userData, true, callbackfunc, {{{ cDefine('EMSCRIPTEN_EVENT_BEFOREUNLOAD') }}}, "beforeunload"); 
     return {{{ cDefine('EMSCRIPTEN_RESULT_SUCCESS') }}};
   },
@@ -2067,6 +2075,7 @@ var LibraryJSEvents = {
   emscripten_set_batterychargingchange_callback_on_thread__sig: 'iii',
   emscripten_set_batterychargingchange_callback_on_thread: function(userData, callbackfunc) {
     if (!JSEvents.battery()) return {{{ cDefine('EMSCRIPTEN_RESULT_NOT_SUPPORTED') }}}; 
+// XXX
     JSEvents.registerBatteryEventCallback(JSEvents.battery(), userData, true, callbackfunc, {{{ cDefine('EMSCRIPTEN_EVENT_BATTERYCHARGINGCHANGE') }}}, "chargingchange", targetThread);
     return {{{ cDefine('EMSCRIPTEN_RESULT_SUCCESS') }}};
   },
@@ -2075,6 +2084,7 @@ var LibraryJSEvents = {
   emscripten_set_batterylevelchange_callback_on_thread__sig: 'iii',
   emscripten_set_batterylevelchange_callback_on_thread: function(userData, callbackfunc) {
     if (!JSEvents.battery()) return {{{ cDefine('EMSCRIPTEN_RESULT_NOT_SUPPORTED') }}}; 
+// XXX
     JSEvents.registerBatteryEventCallback(JSEvents.battery(), userData, true, callbackfunc, {{{ cDefine('EMSCRIPTEN_EVENT_BATTERYLEVELCHANGE') }}}, "levelchange", targetThread);
     return {{{ cDefine('EMSCRIPTEN_RESULT_SUCCESS') }}};
   },

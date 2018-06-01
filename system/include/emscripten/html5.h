@@ -468,6 +468,9 @@ extern EMSCRIPTEN_RESULT emscripten_get_canvas_element_size(const char *target, 
 extern EMSCRIPTEN_RESULT emscripten_set_element_css_size(const char *target, double width, double height);
 extern EMSCRIPTEN_RESULT emscripten_get_element_css_size(const char *target, double *width, double *height);
 
+#define EM_CALLBACK_THREAD_CONTEXT_MAIN_BROWSER_THREAD ((pthread_t)0x1)
+#define EM_CALLBACK_THREAD_CONTEXT_CALLING_THREAD ((pthread_t)0x2)
+
 #define emscripten_set_keypress_callback(target, userData, useCapture, callback)              emscripten_set_keypress_callback_on_thread(             (target), (userData), (useCapture), (callback), EM_CALLBACK_THREAD_CONTEXT_CALLING_THREAD)
 #define emscripten_set_keydown_callback(target, userData, useCapture, callback)               emscripten_set_keydown_callback_on_thread(              (target), (userData), (useCapture), (callback), EM_CALLBACK_THREAD_CONTEXT_CALLING_THREAD)
 #define emscripten_set_keyup_callback(target, userData, useCapture, callback)                 emscripten_set_keyup_callback_on_thread(                (target), (userData), (useCapture), (callback), EM_CALLBACK_THREAD_CONTEXT_CALLING_THREAD)
@@ -505,9 +508,6 @@ extern EMSCRIPTEN_RESULT emscripten_get_element_css_size(const char *target, dou
 #define emscripten_set_beforeunload_callback(userData, callback)                              emscripten_set_beforeunload_callback_on_thread(                   (userData),               (callback), EM_CALLBACK_THREAD_CONTEXT_MAIN_BROWSER_THREAD)
 #define emscripten_set_webglcontextlost_callback(target, userData, useCapture, callback)      emscripten_set_webglcontextlost_callback_on_thread(     (target), (userData), (useCapture), (callback), EM_CALLBACK_THREAD_CONTEXT_CALLING_THREAD)
 #define emscripten_set_webglcontextrestored_callback(target, userData, useCapture, callback)  emscripten_set_webglcontextrestored_callback_on_thread( (target), (userData), (useCapture), (callback), EM_CALLBACK_THREAD_CONTEXT_CALLING_THREAD)
-
-#define EM_CALLBACK_THREAD_CONTEXT_MAIN_BROWSER_THREAD ((pthread_t)0x1)
-#define EM_CALLBACK_THREAD_CONTEXT_CALLING_THREAD ((pthread_t)0x2)
 
 #ifdef __cplusplus
 } // ~extern "C"

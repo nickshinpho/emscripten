@@ -11,10 +11,13 @@
         fdBuf: ['', '', ''],
       };
 
-      function heuristicIsBrowser64Bit() {
+// Tests if type === 'browser' or type === 'os' is 64-bit or not.
+function heuristicIs64Bit(type) {
+//      function heuristicIsBrowser64Bit() {
         function contains(str, substrList) { for(var i in substrList) if (str.indexOf(substrList[i]) != -1) return true; return false; }
         var ua = (navigator.userAgent + ' ' + navigator.oscpu + ' ' + navigator.platform).toLowerCase();
-        if (contains(ua, ['wow64'])) return false; // 32bit browser on 64bit OS
+if (contains(ua, ['wow64'])) return type === 'os'; // 32bit browser on 64bit OS
+//        if (contains(ua, ['wow64'])) return false; // 32bit browser on 64bit OS
         if (contains(ua, ['x86_64', 'amd64', 'ia64', 'win64', 'x64', 'arm64', 'irix64', 'mips64', 'ppc64', 'sparc64'])) return true;
         if (contains(ua, ['i386', 'i486', 'i586', 'i686', 'x86', 'arm7', 'android', 'mobile', 'win32'])) return false;
         if (contains(ua, ['intel mac os'])) return true;
@@ -27,7 +30,8 @@
       // satisfied.
       var supportsWasm = (typeof WebAssembly === 'object' && typeof WebAssembly.Memory === 'function');
       var pageSize = supportsWasm ? 64 * 1024 : 16 * 1024 * 1024;
-      var heuristicIs64Bit = heuristicIsBrowser64Bit();
+//      var heuristicIs64Bit = heuristicIsBrowser64Bit();
+var heuristic64BitBrowser = heuristicIs64Bit('browser');
       function alignPageUp(size) { return pageSize * Math.ceil(size / pageSize); }
 
       // MAX_MEMORY: Specify a strict upper bound to how large the application heap can grow. If the
@@ -43,27 +47,38 @@
 
       // The absolute maximum memory that is available to compiled code is currently one memory page
       // short of 2GB. Pass in Infinity to not specify a max size.
-      var MAX_MEMORY = Math.min(alignPageUp(heuristicIs64Bit ? {{{ MAX_MEMORY_64BIT }}} : {{{ MAX_MEMORY_32BIT }}}), 2048 * 1024 * 1024 - pageSize);
+//      var MAX_MEMORY = Math.min(alignPageUp(heuristicIs64Bit ? {{{ MAX_MEMORY_64BIT }}} : {{{ MAX_MEMORY_32BIT }}}), 2048 * 1024 * 1024 - pageSize);
+var MAX_MEMORY_64BIT = Infinity;
+var MAX_MEMORY_32BIT = 512*1024*1024;
+var MAX_MEMORY = Math.min(alignPageUp(heuristic64BitBrowser ? MAX_MEMORY_64BIT : MAX_MEMORY_32BIT), 2048 * 1024 * 1024 - pageSize);
 
       // MIN_MEMORY: Specify a lower limit of how much memory the application needs at minimum to run.
       // If the browser can't provide this, the page startup should abort to an out-of-memory
       // exception.
-      var MIN_MEMORY = Math.min(alignPageUp(32 * 1024 * 1024), MAX_MEMORY);
+//      var MIN_MEMORY = Math.min(alignPageUp(32 * 1024 * 1024), MAX_MEMORY);
+var MIN_MEMORY = Math.min(alignPageUp(32 * 1024 * 1024), MAX_MEMORY);
 
       // INITIAL_MEMORY: Specify the initial amount of reserved address space for the application.
       // Note that this is only a hint, and this much memory may not actually be acquired. If this is
       // not possible, the page will start up with anything as close to this INITIAL amount as
       // possible, but at least MIN bytes.
-      var INITIAL_MEMORY = Math.min(Math.max(alignPageUp({{{ TOTAL_MEMORY }}}), MIN_MEMORY), MAX_MEMORY);
+//      var INITIAL_MEMORY = Math.min(Math.max(alignPageUp({{{ TOTAL_MEMORY }}}), MIN_MEMORY), MAX_MEMORY);
+var IDEAL_MEMORY_64BIT = 1024 * 1024 * 1024;
+var IDEAL_MEMORY_32BIT = 1024 * 1024 * 1024;
+var IDEAL_MEMORY = Math.min(Math.max(alignPageUp(heuristic64BitBrowser ? IDEAL_MEMORY_64BIT : IDEAL_MEMORY_32BIT), MIN_MEMORY), MAX_MEMORY);
 
       // RESERVE_MAX: If true, pass the max memory request over to WebAssembly Memory allocation to
       // eagerly reserve the maximum amount of address space, if possible. If false, run without a
       // specified maximum reserve.
-      var RESERVE_MAX = {{{ RESERVE_MAX }}};
+//      var RESERVE_MAX = {{{ RESERVE_MAX }}};
+var RESERVE_MAX_64BIT = true;
+var RESERVE_MAX_32BIT = false;
+var RESERVE_MAX = heuristic64BitBrowser ? RESERVE_MAX_64BIT : RESERVE_MAX_32BIT;
 
       // Try to get as much memory close to INITIAL, but at least MIN. For asm.js, we can't actually
       // resize, so attempt to reserve up to MAX memory, but only on detected 64-bit browsers.
-      for (var mem = (heuristicIs64Bit && !supportsWasm) ? MAX_MEMORY : INITIAL_MEMORY; mem >= MIN_MEMORY; mem -= pageSize) {
+for(var mem = IDEAL_MEMORY; mem >= MIN_MEMORY; mem -= pageSize) {
+//      for (var mem = (heuristicIs64Bit && !supportsWasm) ? MAX_MEMORY : INITIAL_MEMORY; mem >= MIN_MEMORY; mem -= pageSize) {
         try {
           if (supportsWasm) {
             if (RESERVE_MAX) Module['wasmMemory'] = new WebAssembly.Memory({ initial: mem / pageSize, maximum: MAX_MEMORY / pageSize });
@@ -80,9 +95,10 @@
       Module['TOTAL_MEMORY'] = Module['buffer'].byteLength;
       Module['MAX_MEMORY'] = MAX_MEMORY;
       function MB(x) { return (x/1024/1024) + 'MB'; }
-#if ASSERTIONS
-      console.log('Initial memory size: ' + MB(Module['TOTAL_MEMORY']) + ' (MIN_MEMORY: ' + MB(MIN_MEMORY) + ', INITIAL_MEMORY: ' + MB(INITIAL_MEMORY) + ', MAX_MEMORY: ' + MB(MAX_MEMORY) + ', heuristicIs64Bit: ' + heuristicIs64Bit + ')');
-#endif
+//#if ASSERTIONS
+//      console.log('Initial memory size: ' + MB(Module['TOTAL_MEMORY']) + ' (MIN_MEMORY: ' + MB(MIN_MEMORY) + ', INITIAL_MEMORY: ' + MB(INITIAL_MEMORY) + ', MAX_MEMORY: ' + MB(MAX_MEMORY) + ', heuristicIs64Bit: ' + heuristicIs64Bit + ')');
+//#endif
+      console.log('Initial memory size: ' + MB(Module['TOTAL_MEMORY']) + ' (MIN_MEMORY: ' + MB(MIN_MEMORY) + ', IDEAL_MEMORY: ' + MB(IDEAL_MEMORY) + ', MAX_MEMORY: ' + MB(MAX_MEMORY) + ', heuristicIs64Bit: ' + heuristic64BitBrowser + ')');
     </script>
 
     <title>Emscripten-Generated Code</title>
@@ -1316,6 +1332,9 @@
           if (Module.fdBuf[0].length > 0) Module.fdBuf[0] = Module.fdBuf[0].length.substr(0, Module.fdBuf[0].length-1);
           return;
         }
+        if (text === undefined) {
+          return;
+        }
         var lastnl = text.lastIndexOf('\n');
         if (lastnl == -1) {
           Module.fdBuf[0] += text;
@@ -1352,12 +1371,31 @@
       })();
 
       Module['print'] = (function() {
-        Module.writeOut(1, Array.prototype.slice.call(arguments).join(' ') + '\n');
+        var element = document.getElementById('output');
+        if (element) element.value = ''; // clear browser cache
+        return function(text) {
+           if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+          // These replacements are necessary if you render to raw HTML
+          //text = text.replace(/&/g, "&amp;");
+          //text = text.replace(/</g, "&lt;");
+          //text = text.replace(/>/g, "&gt;");
+          //text = text.replace('\n', '<br>', 'g');
+          console.log(text);
+          if (element) {
+            element.value += text + "\n";
+            element.scrollTop = element.scrollHeight; // focus on bottom
+           }
+        };
       })();
 
-      Module['printErr'] = (function() {
-        Module.writeOut(2, Array.prototype.slice.call(arguments).join(' ') + '\n');
-       })();
+      Module['printErr'] = function(text) {
+        if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+        if (0) { // XXX disabled for safety typeof dump == 'function') {
+          dump(text + '\n'); // fast, straight to the real console
+        } else {
+          console.error(text);
+        }
+      };
 
       Module['canvas'] = (function() {
         var canvas = document.getElementById('canvas');

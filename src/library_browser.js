@@ -1171,7 +1171,9 @@ var LibraryBrowser = {
 
 #if OFFSCREENCANVAS_SUPPORT
       // If the current GL context is an OffscreenCanvas, but it was initialized with implicit swap mode, perform the swap on behalf of the user.
-      if (typeof GL !== 'undefined' && GL.currentContext && !GLctxIsOnParentThread && !GL.currentContext.attributes.explicitSwapControl && GL.currentContext.GLctx.commit) {
+      if (typeof GL !== 'undefined' && GL.currentContext && !GLctxIsOnParentThread &&
+          GL.currentContext.attributes &&  !GL.currentContext.attributes.explicitSwapControl &&
+          GL.currentContext.GLctx && GL.currentContext.GLctx.commit) {
         GL.currentContext.GLctx.commit();
       }
 #endif
