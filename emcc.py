@@ -1131,6 +1131,12 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
       shared.Settings.FILESYSTEM = 0
       shared.Settings.FETCH = 1
       options.js_libraries.append(shared.path_from_root('src', 'library_asmfs.js'))
+# EPIC EDIT start -- nick.shin 2019-04-15 -- UEMOB-479
+      options.js_libraries.append(shared.path_from_root('src', 'library_sockfs.js'))
+      options.js_libraries.append(shared.path_from_root('src', 'library_fs.js'))        # FS_createPath
+      options.js_libraries.append(shared.path_from_root('src', 'library_tty.js'))       # $TTY   used in library_fs.js
+      options.js_libraries.append(shared.path_from_root('src', 'library_memfs.js'))     # $MEMFS used in ibrary_fs.js
+# EPIC EDIT end -- nick.shin 2019-04-15 -- UEMOB-479
 
     if shared.Settings.FETCH and final_suffix in JS_CONTAINING_ENDINGS:
       input_files.append((next_arg_index, shared.path_from_root('system', 'lib', 'fetch', 'emscripten_fetch.cpp')))
@@ -1143,6 +1149,24 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
     if shared.Settings.DEMANGLE_SUPPORT:
       shared.Settings.EXPORTED_FUNCTIONS += ['___cxa_demangle']
       forced_stdlibs += ['libc++abi']
+## *** following is no longer needed as of 1.38.30 -- leaving here for reference ***
+## EPIC EDIT start -- nick.shin 2019-03-28 -- UE-71873
+## for some reason, these libs are not getting included during builds for the
+## UE4 github version.  would have guessed at least html5.bc would have been
+## included -- but it could be that github version doesn't have "all" of the
+## other UE4 modules (as found in internal epic perforce repo) and these libs
+## might be getting optimized out in:
+##   system_libs.py :: def calculate() :: def add_library()
+## look for 'considering %s: we need %s and have %s' -- and (need_syms) will be
+## blank when it should be filled a functions (especially for UE4)
+##
+## forcing them in here:
+#      forced_stdlibs = ['libcxx', 'libcxxabi', 'html5', 'libc-extras']
+#      if shared.Settings.USE_PTHREADS:
+#        forced_stdlibs += ['gl-mt']
+#      else:
+#        forced_stdlibs += ['gl']
+## EPIC EDIT end -- nick.shin 2019-03-28 -- UE-71873
 
     if not shared.Settings.ONLY_MY_CODE and not shared.Settings.MINIMAL_RUNTIME:
       # Always need malloc and free to be kept alive and exported, for internal use and other modules
@@ -1222,8 +1246,13 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
       # may need, including filesystem usage from standalone file packager output (i.e.
       # file packages not built together with emcc, but that are loaded at runtime
       # separately, and they need emcc's output to contain the support they need)
-      if not shared.Settings.ASMFS:
-        shared.Settings.EXPORTED_RUNTIME_METHODS += [
+# EPIC EDIT strart -- nick.shin 2019-04-15 -- UEMOB-479
+#      if not shared.Settings.ASMFS:
+#        shared.Settings.EXPORTED_RUNTIME_METHODS += [
+      shared.Settings.EXPORTED_RUNTIME_METHODS += [
+# these are still needed for UE4 (currently) with 1.38.30
+# XXX: these still seem to be missing during rumtime...
+# EPIC EDIT end -- nick.shin 2019-04-15 -- UEMOB-479
           'FS_createFolder',
           'FS_createPath',
           'FS_createDataFile',
@@ -1830,6 +1859,13 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
 
     if not shared.Settings.WASM_BACKEND:
       with ToolchainProfiler.profile_block('post-link'):
+# EPIC EDIT start -- nick.shin 2019-02-06 -- UE-69632
+# moving prints from UnrealBuildTool.cs to here -- where it will be printed closer to where the build seems to "hang"
+# 'post-link' & 'emscript (llvm => executable code)' & 'asm2wasm' ==> all take a long time to complete
+        logger.info("NOTE: linking HTML5 project -- this takes at least 7 minutes (and up to 20 minutes on older machines) to complete.")
+        logger.info("      we are workig with the Emscripten makers to speed this up.")
+# EPIC EDIT end -- nick.shin 2019-02-06 -- UE-69632
+
         if DEBUG:
           logger.debug('saving intermediate processing steps to %s', shared.get_emscripten_temp_dir())
           if not LEAVE_INPUTS_RAW:
@@ -2061,12 +2097,14 @@ There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR P
         with open(worker_output, 'w') as f:
           f.write(shared.read_and_preprocess(shared.path_from_root('src', 'worker.js'), expand_macros=True))
 
-      # Generate the fetch.js worker script for multithreaded emscripten_fetch() support if targeting pthreads.
-      if shared.Settings.FETCH and shared.Settings.USE_PTHREADS:
-        if shared.Settings.WASM_BACKEND:
-          logger.warning('Bug/TODO: Blocking calls to the fetch API do not currently work under WASM backend (https://github.com/emscripten-core/emscripten/issues/7024)')
-        else:
-          shared.make_fetch_worker(final, shared.Settings.FETCH_WORKER_FILE)
+# EPIC EDIT start -- nick.shin 2019-04-15 -- UEMOB-479
+        # Generate the fetch.js worker script for multithreaded emscripten_fetch() support if targeting pthreads.
+        if shared.Settings.FETCH:
+          if shared.Settings.WASM_BACKEND:
+            logger.warning('Bug/TODO: Blocking calls to the fetch API do not currently work under WASM backend (https://github.com/emscripten-core/emscripten/issues/7024)')
+          else:
+            shared.make_fetch_worker(final, target_dir + '/' + shared.Settings.FETCH_WORKER_FILE)
+# EPIC EDIT end -- nick.shin 2019-04-15 -- UEMOB-479
 
     # exit block 'memory initializer'
     log_time('memory initializer')
